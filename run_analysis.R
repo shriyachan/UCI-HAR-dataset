@@ -1,56 +1,44 @@
-## Read Data
-subject_test <- read.table("C:/Users/Murali/Downloads/getdata_projectfiles_UCI HAR Dataset/UCI HAR Dataset/test/subject_test.txt")
-subject_train <- read.table("C:/Users/Murali/Downloads/getdata_projectfiles_UCI HAR Dataset/UCI HAR Dataset/train/subject_train.txt")
-X_test <- read.table("C:/Users/Murali/Downloads/getdata_projectfiles_UCI HAR Dataset/UCI HAR Dataset/test/X_test.txt")
-X_train <- read.table("C:/Users/Murali/Downloads/getdata_projectfiles_UCI HAR Dataset/UCI HAR Dataset/train/X_train.txt")
-y_test <- read.table("C:/Users/Murali/Downloads/getdata_projectfiles_UCI HAR Dataset/UCI HAR Dataset/test/y_test.txt")
-y_train <- read.table("C:/Users/Murali/Downloads/getdata_projectfiles_UCI HAR Dataset/UCI HAR Dataset/train/y_train.txt")
+##read data
+features <- read.table("C:/Users/Murali/Downloads/getdata_projectfiles_UCI HAR Dataset/UCI HAR Dataset/features.txt", col.names = c("n","functions"))
+activities <- read.table("C:/Users/Murali/Downloads/getdata_projectfiles_UCI HAR Dataset/UCI HAR Dataset/activity_labels.txt", col.names = c("code", "activity"))
+subject_test <- read.table("C:/Users/Murali/Downloads/getdata_projectfiles_UCI HAR Dataset/UCI HAR Dataset/test/subject_test.txt", col.names = "subject")
+x_test <- read.table("C:/Users/Murali/Downloads/getdata_projectfiles_UCI HAR Dataset/UCI HAR Dataset/test/X_test.txt", col.names = features$functions)
+y_test <- read.table("C:/Users/Murali/Downloads/getdata_projectfiles_UCI HAR Dataset/UCI HAR Dataset/test/y_test.txt", col.names = "code")
+subject_train <- read.table("C:/Users/Murali/Downloads/getdata_projectfiles_UCI HAR Dataset/UCI HAR Dataset/train/subject_train.txt", col.names = "subject")
+x_train <- read.table("C:/Users/Murali/Downloads/getdata_projectfiles_UCI HAR Dataset/UCI HAR Dataset/train/X_train.txt", col.names = features$functions)
+y_train <- read.table("C:/Users/Murali/Downloads/getdata_projectfiles_UCI HAR Dataset/UCI HAR Dataset/train/y_train.txt", col.names = "code")
 
-activity_labels <- read.table("C:/Users/Murali/Downloads/getdata_projectfiles_UCI HAR Dataset/UCI HAR Dataset/activity_labels.txt")
-features <- read.table("C:/Users/Murali/Downloads/getdata_projectfiles_UCI HAR Dataset/UCI HAR Dataset/features.txt")  
+##merging
+X <- rbind(x_train, x_test)
+Y <- rbind(y_train, y_test)
+Subject <- rbind(subject_train, subject_test)
+Merged_Data <- cbind(Subject, Y, X)
 
-## Analysis
-# 1. Merges the training and the test sets to create one data set.
-dataSet <- rbind(X_train,X_test)
+##Extracts only the measurements on the mean and standard deviation for each measurement.
+TidyData <- Merged_Data %>% 
+  select(subject, code, contains("mean"), contains("std"))
 
-# 2. Extracts only the measurements on the mean and standard deviation for each measurement. 
-# Create a vector of only mean and std, use the vector to subset.
-MeanStdOnly <- grep("mean()|std()", features[, 2]) 
-dataSet <- dataSet[,MeanStdOnly]
+##Uses descriptive activity names to name the activities in the data set.
+TidyData$code <- activities[TidyData$code, 2]
 
+##Appropriately labels the data set with descriptive variable names
+names(TidyData)[2] = "activity"
+names(TidyData)<-gsub("Acc", "Accelerometer", names(TidyData))
+names(TidyData)<-gsub("Gyro", "Gyroscope", names(TidyData))
+names(TidyData)<-gsub("BodyBody", "Body", names(TidyData))
+names(TidyData)<-gsub("Mag", "Magnitude", names(TidyData))
+names(TidyData)<-gsub("^t", "Time", names(TidyData))
+names(TidyData)<-gsub("^f", "Frequency", names(TidyData))
+names(TidyData)<-gsub("tBody", "TimeBody", names(TidyData))
+names(TidyData)<-gsub("-mean()", "Mean", names(TidyData), ignore.case = TRUE)
+names(TidyData)<-gsub("-std()", "STD", names(TidyData), ignore.case = TRUE)
+names(TidyData)<-gsub("-freq()", "Frequency", names(TidyData), ignore.case = TRUE)
+names(TidyData)<-gsub("angle", "Angle", names(TidyData))
+names(TidyData)<-gsub("gravity", "Gravity", names(TidyData))
 
-# 4. Appropriately labels the data set with descriptive activity names.
-# Create vector of "Clean" feature names by getting rid of "()" apply to the dataSet to rename labels.
-CleanFeatureNames <- sapply(features[, 2], function(x) {gsub("[()]", "",x)})
-names(dataSet) <- CleanFeatureNames[MeanStdOnly]
+## From the data set in step 4, creates a second, independent tidy data set with the average of each variable for each activity and each subject.
+FinalData <- TidyData %>%
+  group_by(subject, activity) %>%
+  summarise_all(funs(mean))
 
-# combine test and train of subject data and activity data, give descriptive lables
-subject <- rbind(subject_train, subject_test)
-names(subject) <- 'subject'
-activity <- rbind(y_train, y_test)
-names(activity) <- 'activity'
-
-# combine subject, activity, and mean and std only data set to create final data set.
-dataSet <- cbind(subject,activity, dataSet)
-
-
-# 3. Uses descriptive activity names to name the activities in the data set
-# group the activity column of dataSet, re-name lable of levels with activity_levels, and apply it to dataSet.
-act_group <- factor(dataSet$activity)
-levels(act_group) <- activity_labels[,2]
-dataSet$activity <- act_group
-
-
-# 5. Creates a second, independent tidy data set with the average of each variable for each activity and each subject. 
-
-# check if reshape2 package is installed
-if (!"reshape2" %in% installed.packages()) {
-  install.packages("reshape2")
-}
-library("reshape2")
-
-# melt data to tall skinny data and cast means. Finally write the tidy data to the working directory as "tidy_data.txt"
-baseData <- melt(dataSet,(id.vars=c("subject","activity")))
-secondDataSet <- dcast(baseData, subject + activity ~ variable, mean)
-names(secondDataSet)[-c(1:2)] <- paste("[mean of]" , names(secondDataSet)[-c(1:2)] )
-write.table(secondDataSet,row.name=FALSE, "tidy_data.txt", sep = ",")
+write.table(FinalData, "TidyData.txt", row.name=FALSE)
